@@ -130,7 +130,7 @@ def get_ls_power_subsamples_for_bee_date(bee_id, date, verbose=False, **kwargs):
     total_seconds = (ending_date - starting_date).total_seconds()
     assert starting_date <= velocities.datetime.min()
     #print(velocities.datetime.values[0])
-    velocities["offset"] = [t.total_seconds() for t in velocities.datetime - starting_date.replace(tzinfo=None)]
+    velocities["offset"] = [t.total_seconds() for t in velocities.datetime - starting_date]
     
     interval_duration_seconds = 60 * 5
     all_resampled_powers = []
