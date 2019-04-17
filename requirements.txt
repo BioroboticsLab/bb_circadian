@@ -1,0 +1,6 @@
+numpy
+pandas
+numba
+psycopg2
+scikit-learn
+matplotlib
