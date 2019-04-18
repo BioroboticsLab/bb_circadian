@@ -1,7 +1,7 @@
 from astropy.stats import LombScargle
 import bb_behavior.db
 from collections import defaultdict
-import datetime
+import datetime, pytz
 from itertools import chain
 import itertools
 import matplotlib.pyplot as plt
@@ -128,7 +128,10 @@ def get_ls_power_subsamples_for_bee_date(bee_id, date, verbose=False, **kwargs):
     #print(starting_date)
     ending_date = date + datetime.timedelta(days=1)
     total_seconds = (ending_date - starting_date).total_seconds()
+    assert starting_date.tzinfo == pytz.UTC
+    assert velocities.datetime.iloc[0].tzinfo == pytz.UTC
     assert starting_date <= velocities.datetime.min()
+
     #print(velocities.datetime.values[0])
     velocities["offset"] = [t.total_seconds() for t in velocities.datetime - starting_date]
     
@@ -160,6 +163,8 @@ def get_ls_power_subsamples_for_bee_date(bee_id, date, verbose=False, **kwargs):
     return results_dataframe, all_resampled_powers
         
 def get_ls_powers_per_age_groups(date, bees_per_group=None, max_workers=32, verbose=None, progress=None):
+    assert date.tzinfo == pytz.UTC
+    
     from concurrent.futures import ProcessPoolExecutor
     from .meta import get_bee_age_groups
     
