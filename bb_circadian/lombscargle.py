@@ -13,6 +13,7 @@ import scipy.stats
 
 def get_ls_power_for_bee_date(bee_id, date, velocities = None, verbose=False,
                               resample_interval_hours=1.0, resample_runs=200, **kwargs):
+    verbose = verbose or 0
     if velocities is None:
         delta = datetime.timedelta(days=1)
         velocities = bb_behavior.db.trajectory.get_bee_velocities(bee_id, date - delta, date + delta, **kwargs)
@@ -164,7 +165,7 @@ def get_ls_power_subsamples_for_bee_date(bee_id, date, verbose=False, **kwargs):
         
 def get_ls_powers_per_age_groups(date, bees_per_group=None, max_workers=32, verbose=None, progress=None):
     assert date.tzinfo == pytz.UTC
-    
+
     from concurrent.futures import ProcessPoolExecutor
     from .meta import get_bee_age_groups
     
