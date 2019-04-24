@@ -12,7 +12,7 @@ import seaborn as sns
 import scipy.stats
 
 def get_ls_power_for_bee_date(bee_id, date, velocities = None, verbose=False,
-                              resample_interval_hours=1.0, resample_runs=200, **kwargs):
+                              resample_interval_hours=1.0, resample_runs=400, **kwargs):
     verbose = verbose or 0
     if velocities is None:
         delta = datetime.timedelta(days=1)
