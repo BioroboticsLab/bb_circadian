@@ -14,8 +14,8 @@ import scipy.stats
 def get_ls_power_for_bee_date(bee_id, date, velocities = None, verbose=False,
                               resample_interval_hours=1.0, resample_runs=400, **kwargs):
     verbose = verbose or 0
+    delta = datetime.timedelta(days=1, hours=12)
     if velocities is None:
-        delta = datetime.timedelta(days=1)
         velocities = bb_behavior.db.trajectory.get_bee_velocities(bee_id, date - delta, date + delta, **kwargs)
     if velocities is None:
         return None, None
@@ -35,8 +35,8 @@ def get_ls_power_for_bee_date(bee_id, date, velocities = None, verbose=False,
             
             # Collect the fitting indices once.
             shuffled_idx = []
-            begin_dt = date - datetime.timedelta(days=1)
-            end_dt = date + datetime.timedelta(days=1)
+            begin_dt = date - delta
+            end_dt = date + delta
             current_dt = begin_dt
             while current_dt < end_dt:
                 current_end_dt = current_dt + resample_duration
@@ -121,13 +121,13 @@ def get_ls_power_for_bee_date(bee_id, date, velocities = None, verbose=False,
             p_value, resampled_powers
 
 def get_ls_power_subsamples_for_bee_date(bee_id, date, verbose=False, **kwargs):
-    delta = datetime.timedelta(days=1)
+    delta = datetime.timedelta(days=1, hours=12)
     velocities = bb_behavior.db.trajectory.get_bee_velocities(bee_id, date - delta, date + delta, **kwargs)
     if velocities is None:
         return []
-    starting_date = date - datetime.timedelta(days=1)
+    starting_date = date - delta
     #print(starting_date)
-    ending_date = date + datetime.timedelta(days=1)
+    ending_date = date + delta
     total_seconds = (ending_date - starting_date).total_seconds()
     assert starting_date.tzinfo == pytz.UTC
     assert velocities.datetime.iloc[0].tzinfo == pytz.UTC
