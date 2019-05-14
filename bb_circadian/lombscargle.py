@@ -275,7 +275,9 @@ def collect_circadianess_subsamples_for_bee_date(bee_id, date, verbose=False, **
         except Exception as e:
             results = dict(error=str(e), stacktrace=traceback.format_exc())
         if results is not None:
-            results["subsampling"] = subsample_hours
+            results["subsample"] = subsample_hours
+            results["n_data_points"] = velocities.shape[0]
+            results["n_subsampled_data_points"] = subsampled_velocities.shape[0]
             all_results[subsample_hours] = results
     return all_results
 
