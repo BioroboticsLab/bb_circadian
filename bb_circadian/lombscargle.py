@@ -205,7 +205,8 @@ def plot_circadian_fit(velocities_df, circadian_fit_data=None):
 
     ax.axhline(base_activity, color="k", linestyle="--")
     ax.axhline(max_activity, color="k", linestyle="--")
-    plt.ylim(0, offset + amplitude * 5.0)
+    p90 = np.percentile(velocities_df.velocity.values, 95)
+    plt.ylim(0, p90)
     plt.title("R^2 (vs constant): {:3.3f}, R^2 (vs linear): {:3.3f}\n" \
                 "circadian: {:2.1%}, amplitude: {:3.3f}, phase: {:3.1f}h\n" \
                 "R^2 of zero-min model (vs constant): {:3.3f}, amplitude: {:3.3f}, phase: {:3.1f}h".format(
@@ -272,6 +273,10 @@ def collect_circadianess_subsamples_for_bee_date(bee_id, date, verbose=False, **
                     results["best_match_frequency"] = best_match_data["max_frequency"]
                     results["best_match_power"] = best_match_data["max_power"]
                     results["best_match_shift"] = best_match_data["max_frequency"] / best_match_data["circadian_frequency"]
+
+                velocities_resampled = subsampled_velocities.copy()
+                velocities_resampled.set_index("datetime", inplace=True)
+                results["data_irregularity"] = velocities_resampled.resample("1h").count().velocity.std()
         except Exception as e:
             results = dict(error=str(e), stacktrace=traceback.format_exc())
         if results is not None:
