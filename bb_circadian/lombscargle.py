@@ -94,6 +94,9 @@ def fit_circadian_sine(X, Y, fix_minimum=False):
     r_squared_linear = 1.0 - (circadian_sse / linear_sse)
     r_squared = 1.0 - (circadian_sse / constant_sse)
     
+    power_linear = (linear_sse - circadian_sse) / linear_sse
+    power = (constant_sse - circadian_sse) / constant_sse
+
     return dict(parameters=circadian_sine_parameters, jacobian=fit[1],
                 circadian_sse=circadian_sse,
                 angular_frequency=2.0 * np.pi * 1 / 60 / 60/  24,
@@ -101,7 +104,8 @@ def fit_circadian_sine(X, Y, fix_minimum=False):
                 linear_sse=linear_sse,
                 constant_parameters=constant_fit.convert().coef,
                 constant_sse=constant_sse,
-                r_squared=r_squared, r_squared_linear=r_squared_linear)
+                r_squared=r_squared, r_squared_linear=r_squared_linear,
+                power=power, power_linear=power_linear)
 
 
 def collect_circadianess_data_for_bee_date(bee_id, date, velocities=None,
