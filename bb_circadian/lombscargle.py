@@ -78,7 +78,7 @@ def fit_circadian_sine(X, Y, fix_minimum=False):
     else:
         initial_parameters = [amplitude + offset / 2.0, phase]
         fun = fixed_minimum_circadian_sine
-    fit = scipy.optimize.curve_fit(fun, X, Y, p0=initial_parameters)
+    fit = scipy.optimize.curve_fit(fun, X, Y, p0=initial_parameters, bounds=(0, np.inf))
     circadian_sine_parameters = fit[0]
     y_predicted = fun(X, *circadian_sine_parameters)
     circadian_sse = np.sum((y_predicted - Y) ** 2.0)
