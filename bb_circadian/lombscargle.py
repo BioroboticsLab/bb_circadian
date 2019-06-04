@@ -246,7 +246,7 @@ def get_highest_power_circadian_frequency(bee_id, date, velocities=None,
     return dict(max_power=max_power, max_frequency=max_frequency,
                 circadian_power=circadian_power, circadian_frequency=day_frequency)
 
-def collect_circadianess_subsamples_for_bee_date(bee_id, date, verbose=False, **kwargs):
+def collect_circadianess_subsamples_for_bee_date(bee_id, date, verbose=False, n_workers=8, **kwargs):
     delta = datetime.timedelta(days=1, hours=12)
     velocities = bb_behavior.db.trajectory.get_bee_velocities(bee_id, date - delta, date + delta, **kwargs)
     if velocities is None:
@@ -273,7 +273,7 @@ def collect_circadianess_subsamples_for_bee_date(bee_id, date, verbose=False, **
                 valid_indices[(velocities.offset.values >= begin) & (velocities.offset.values < end)] = True
             subsampled_velocities = velocities.iloc[valid_indices, :]
         try:
-            results = collect_circadianess_data_for_bee_date(bee_id, date, velocities=subsampled_velocities, **kwargs)
+            results = collect_circadianess_data_for_bee_date(bee_id, date, velocities=subsampled_velocities, n_workers=n_workers, **kwargs)
             if results is not None:
                 best_match_data = get_highest_power_circadian_frequency(bee_id, date, velocities=subsampled_velocities)
                 if best_match_data is not None:
