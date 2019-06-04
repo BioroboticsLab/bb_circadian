@@ -5,11 +5,14 @@ import datetime, pytz
 from itertools import chain
 import itertools
 import matplotlib.pyplot as plt
+import pathos.multiprocessing
 import numpy as np
+import numpy.polynomial.polynomial
 import numba
 import pandas as pd
 import warnings
 import scipy.stats
+import scipy.optimize
 import traceback
 
 
@@ -66,9 +69,7 @@ def fit_circadian_sine(X, Y, fix_minimum=False):
             Whether to fix offset = amplitude so that min(f(X)) == 0.
     Returns:
         Dictionary with all informations about a fit.
-    """
-    import scipy.optimize
-    
+    """   
     amplitude = 3 * np.std(Y) / (2 ** 0.5)
     phase = 0
     offset = np.mean(Y)
@@ -83,12 +84,10 @@ def fit_circadian_sine(X, Y, fix_minimum=False):
     y_predicted = fun(X, *circadian_sine_parameters)
     circadian_sse = np.sum((y_predicted - Y) ** 2.0)
     
-    from numpy.polynomial.polynomial import Polynomial
-    
-    constant_fit, full_data = Polynomial.fit(X, Y, deg=0, full=True)
+    constant_fit, full_data = numpy.polynomial.polynomial.Polynomial.fit(X, Y, deg=0, full=True)
     constant_sse = full_data[0][0]
     
-    linear_fit, full_data = Polynomial.fit(X, Y, deg=1, full=True)
+    linear_fit, full_data = numpy.polynomial.polynomial.Polynomial.fit(X, Y, deg=1, full=True)
     linear_sse = full_data[0][0]
     
     r_squared_linear = 1.0 - (circadian_sse / linear_sse)
@@ -110,7 +109,7 @@ def fit_circadian_sine(X, Y, fix_minimum=False):
 
 def collect_circadianess_data_for_bee_date(bee_id, date, velocities=None,
         delta=datetime.timedelta(days=1, hours=12),
-        resample_runs=400, shuffle_interval_hours=1.0, **kwargs):
+        resample_runs=400, shuffle_interval_hours=1.0, n_workers=8, **kwargs):
     
     if velocities is None:
         velocities = bb_behavior.db.trajectory.get_bee_velocities(bee_id, date - delta, date + delta, **kwargs)
@@ -127,15 +126,19 @@ def collect_circadianess_data_for_bee_date(bee_id, date, velocities=None,
     end_dt = date + delta
 
     # Collect LS powers for shuffled time series.
-    resampled_powers = []
-    for shuffled_v, shuffled_ts in get_shuffled_time_series(velocities.datetime, begin_dt, end_dt,
-                    values=(v,), unshuffled_values=(ts,),
-                    shuffle_interval_hours=shuffle_interval_hours, n_iter=resample_runs):
+    def collect_powers(args):
+        shuffled_ts, shuffled_v = args
         try:
+            from bb_circadian.lombscargle import fit_circadian_sine
             fit = fit_circadian_sine(shuffled_ts, shuffled_v)
-            resampled_powers.append(fit["r_squared"])
+            return fit["r_squared"]
         except (RuntimeError, TypeError):
-            continue
+            return None
+    pool = pathos.multiprocessing.ProcessingPool(n_workers)
+    resampled_powers = pool.map(collect_powers, get_shuffled_time_series(velocities.datetime, begin_dt, end_dt,
+                    values=(v,), unshuffled_values=(ts,),
+                    shuffle_interval_hours=shuffle_interval_hours, n_iter=resample_runs))
+    resampled_powers = [power for power in resampled_powers if power is not None]
 
     # Distribution of powers.
     dist_args = scipy.stats.chi2.fit(resampled_powers, floc=0.0)
@@ -290,8 +293,8 @@ def collect_circadianess_subsamples_for_bee_date(bee_id, date, verbose=False, **
             all_results[subsample_hours] = results
     return all_results
 
-def get_circadianess_per_age_groups(date, bees_per_group=None, max_workers=32, verbose=None, progress=None,
-                                    n_age_groups=5, age_group_index=None):
+def get_circadianess_per_age_groups(date, bees_per_group=None, max_workers=8, verbose=None, progress=None,
+                                    n_age_groups=5, age_group_index=None, max_resample_workers=8):
     assert date.tzinfo == pytz.UTC
 
     from concurrent.futures import ProcessPoolExecutor
@@ -331,7 +334,7 @@ def get_circadianess_per_age_groups(date, bees_per_group=None, max_workers=32, v
             for bee in bees:
                 bee = int(bee)
                 results.append(executor.submit(collect_circadianess_subsamples_for_bee_date,
-                                              bee, date))
+                                              bee, date, n_workers=max_resample_workers))
             # Collect results.
             for future, bee in zip(results, bees): 
                 result = future.result()
