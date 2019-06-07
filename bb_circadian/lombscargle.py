@@ -294,13 +294,13 @@ def collect_circadianess_subsamples_for_bee_date(bee_id, date, verbose=False, n_
     return all_results
 
 def get_circadianess_per_age_groups(date, bees_per_group=None, max_workers=8, verbose=None, progress=None,
-                                    n_age_groups=5, age_group_index=None, max_resample_workers=8):
+                                    n_age_groups=15, age_group_index=None, max_resample_workers=8):
     assert date.tzinfo == pytz.UTC
 
     from concurrent.futures import ProcessPoolExecutor
     from .meta import get_bee_age_groups
     
-    age_groups = get_bee_age_groups(date)
+    age_groups = get_bee_age_groups(date, bin_size=3)
     if age_group_index is not None:
         age_group_keys = list(sorted(age_groups.keys()))
         if len(age_group_keys) <= age_group_index:
