@@ -127,7 +127,7 @@ def collect_circadianess_data_for_bee_date(bee_id, date, velocities=None,
 
     # Collect LS powers for shuffled time series.
     def collect_powers(args):
-        shuffled_ts, shuffled_v = args
+        shuffled_v, shuffled_ts = args
         try:
             from bb_circadian.lombscargle import fit_circadian_sine
             fit = fit_circadian_sine(shuffled_ts, shuffled_v)
