@@ -330,7 +330,7 @@ def get_circadianess_per_age_groups(date, bees_per_group=None, max_workers=8, ve
             for bee in bees:
                 bee = int(bee)
                 results.append(executor.submit(collect_circadianess_subsamples_for_bee_date,
-                                              bee, date, n_workers=max_resample_workers))
+                                              bee, date, confidence_threshold=0.5, n_workers=max_resample_workers))
             # Collect results.
             for future, bee in zip(results, bees): 
                 result = future.result()
@@ -343,4 +343,3 @@ def get_circadianess_per_age_groups(date, bees_per_group=None, max_workers=8, ve
                         all_results[subsample, date, bee] = sub_dict
                     
     return all_results
-
