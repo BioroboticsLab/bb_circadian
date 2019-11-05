@@ -158,6 +158,18 @@ def collect_circadianess_data_for_bee_date(bee_id, date, velocities=None,
     except (RuntimeError, TypeError):
         pass
 
+    # Additionally, get night/day velocities.
+    try:
+        time_index = pd.DatetimeIndex(velocities.datetime)
+        daytime = time_index.indexer_between_time("9:00", "18:00")
+        nighttime = time_index.indexer_between_time("21:00", "6:00")
+        bee_date_data["day_mean"] = np.mean(velocities.iloc[daytime].velocity.values)
+        bee_date_data["day_std"] = np.std(velocities.iloc[daytime].velocity.values)
+        bee_date_data["night_mean"] = np.mean(velocities.iloc[nighttime].velocity.values)
+        bee_date_data["night_std"] = np.std(velocities.iloc[nighttime].velocity.values)
+    except:
+        raise
+
     return bee_date_data
 
 def plot_circadian_fit(velocities_df, circadian_fit_data=None):
@@ -242,7 +254,7 @@ def get_highest_power_circadian_frequency(bee_id, date, velocities=None,
     return dict(max_power=max_power, max_frequency=max_frequency,
                 circadian_power=circadian_power, circadian_frequency=day_frequency)
 
-def collect_circadianess_subsamples_for_bee_date(bee_id, date, verbose=False, n_workers=8, **kwargs):
+def collect_circadianess_subsamples_for_bee_date(bee_id, date, verbose=False, n_workers=8, subsample=True, **kwargs):
     delta = datetime.timedelta(days=1, hours=12)
     velocities = bb_behavior.db.trajectory.get_bee_velocities(bee_id, date - delta, date + delta, **kwargs)
     if velocities is None:
@@ -258,8 +270,12 @@ def collect_circadianess_subsamples_for_bee_date(bee_id, date, verbose=False, n_
     
     interval_duration_seconds = 60 * 5
     
+    subsample_fractions_to_evaluate = (None, )
+    if subsample:
+        subsample_fractions_to_evaluate = (None, 0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 6.0, 12.0, 18.0)
+
     all_results = dict()
-    for subsample_hours in (None, 0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 6.0, 12.0, 18.0):
+    for subsample_hours in subsample_fractions_to_evaluate:
         subsampled_velocities = velocities
         if subsample_hours is not None:
             valid_indices = np.zeros(shape=(velocities.shape[0],), dtype=np.bool)
