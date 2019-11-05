@@ -105,10 +105,10 @@ def fit_circadian_sine(X, Y, fix_minimum=False):
 
 def collect_circadianess_data_for_bee_date(bee_id, date, velocities=None,
         delta=datetime.timedelta(days=1, hours=12),
-        resample_runs=400, shuffle_interval_hours=1.0, n_workers=8, **kwargs):
+        resample_runs=400, shuffle_interval_hours=1.0, n_workers=8, velocity_kws={}):
     
     if velocities is None:
-        velocities = bb_behavior.db.trajectory.get_bee_velocities(bee_id, date - delta, date + delta, **kwargs)
+        velocities = bb_behavior.db.trajectory.get_bee_velocities(bee_id, date - delta, date + delta, **velocity_kws)
     if velocities is None:
         return None
     if "offset" in velocities.columns:
@@ -254,9 +254,9 @@ def get_highest_power_circadian_frequency(bee_id, date, velocities=None,
     return dict(max_power=max_power, max_frequency=max_frequency,
                 circadian_power=circadian_power, circadian_frequency=day_frequency)
 
-def collect_circadianess_subsamples_for_bee_date(bee_id, date, verbose=False, n_workers=8, subsample=True, **kwargs):
+def collect_circadianess_subsamples_for_bee_date(bee_id, date, verbose=False, n_workers=8, subsample=True, velocity_kws={}, **kwargs):
     delta = datetime.timedelta(days=1, hours=12)
-    velocities = bb_behavior.db.trajectory.get_bee_velocities(bee_id, date - delta, date + delta, **kwargs)
+    velocities = bb_behavior.db.trajectory.get_bee_velocities(bee_id, date - delta, date + delta, **velocity_kws)
     if velocities is None:
         return []
     starting_date = date - delta
@@ -285,7 +285,8 @@ def collect_circadianess_subsamples_for_bee_date(bee_id, date, verbose=False, n_
                 valid_indices[(velocities.offset.values >= begin) & (velocities.offset.values < end)] = True
             subsampled_velocities = velocities.iloc[valid_indices, :]
         try:
-            results = collect_circadianess_data_for_bee_date(bee_id, date, velocities=subsampled_velocities, n_workers=n_workers, **kwargs)
+            results = collect_circadianess_data_for_bee_date(bee_id, date, velocities=subsampled_velocities, n_workers=n_workers,
+                                                                velocity_kws=velocity_kws, **kwargs)
             if results is not None:
                 best_match_data = get_highest_power_circadian_frequency(bee_id, date, velocities=subsampled_velocities)
                 if best_match_data is not None:
@@ -306,7 +307,7 @@ def collect_circadianess_subsamples_for_bee_date(bee_id, date, verbose=False, n_
     return all_results
 
 def get_circadianess_per_age_groups(date, bees_per_group=None, max_workers=8, verbose=None, progress=None,
-                                    n_age_groups=15, age_group_index=None, max_resample_workers=8, **kwargs):
+                                    n_age_groups=15, age_group_index=None, max_resample_workers=8, circadianess_kws={}, velocity_kws={}):
     assert date.tzinfo == pytz.UTC
 
     from concurrent.futures import ProcessPoolExecutor
@@ -346,8 +347,8 @@ def get_circadianess_per_age_groups(date, bees_per_group=None, max_workers=8, ve
             for bee in bees:
                 bee = int(bee)
                 results.append(executor.submit(collect_circadianess_subsamples_for_bee_date,
-                                              bee, date, confidence_threshold=0.5, n_workers=max_resample_workers,
-                                              **kwargs))
+                                              bee, date, n_workers=max_resample_workers,
+                                              velocity_kws=velocity_kws, **circadianess_kws))
             # Collect results.
             for future, bee in zip(results, bees): 
                 result = future.result()
