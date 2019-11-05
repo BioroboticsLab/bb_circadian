@@ -306,7 +306,7 @@ def collect_circadianess_subsamples_for_bee_date(bee_id, date, verbose=False, n_
     return all_results
 
 def get_circadianess_per_age_groups(date, bees_per_group=None, max_workers=8, verbose=None, progress=None,
-                                    n_age_groups=15, age_group_index=None, max_resample_workers=8):
+                                    n_age_groups=15, age_group_index=None, max_resample_workers=8, **kwargs):
     assert date.tzinfo == pytz.UTC
 
     from concurrent.futures import ProcessPoolExecutor
@@ -346,7 +346,8 @@ def get_circadianess_per_age_groups(date, bees_per_group=None, max_workers=8, ve
             for bee in bees:
                 bee = int(bee)
                 results.append(executor.submit(collect_circadianess_subsamples_for_bee_date,
-                                              bee, date, confidence_threshold=0.5, n_workers=max_resample_workers))
+                                              bee, date, confidence_threshold=0.5, n_workers=max_resample_workers,
+                                              **kwargs))
             # Collect results.
             for future, bee in zip(results, bees): 
                 result = future.result()
