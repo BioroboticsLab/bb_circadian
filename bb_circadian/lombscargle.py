@@ -130,10 +130,15 @@ def collect_circadianess_data_for_bee_date(bee_id, date, velocities=None,
             return fit["r_squared"]
         except (RuntimeError, TypeError):
             return None
-    pool = pathos.multiprocessing.ProcessingPool(n_workers)
-    resampled_powers = pool.map(collect_powers, get_shuffled_time_series(velocities.datetime, begin_dt, end_dt,
-                    values=(v,), unshuffled_values=(ts,),
-                    shuffle_interval_hours=shuffle_interval_hours, n_iter=resample_runs))
+    mapper = None
+    if n_workers != 0:
+        pool = pathos.multiprocessing.ProcessingPool(n_workers)
+        mapper = pool.map
+    else:
+        mapper = map
+    resampled_powers = mapper(collect_powers, get_shuffled_time_series(velocities.datetime, begin_dt, end_dt,
+                        values=(v,), unshuffled_values=(ts,),
+                        shuffle_interval_hours=shuffle_interval_hours, n_iter=resample_runs))
     resampled_powers = [power for power in resampled_powers if power is not None]
 
     # Distribution of powers.
