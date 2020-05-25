@@ -187,7 +187,9 @@ def plot_circadian_fit(velocities_df, circadian_fit_data=None):
     
     velocities_resampled = velocities_df.copy()
     velocities_resampled.set_index("datetime", inplace=True)
-    velocities_resampled = velocities_resampled.resample("2min").mean()
+
+    if velocities_resampled.shape[0] > 10000:
+        velocities_resampled = velocities_resampled.resample("2min").mean()
     
     ts_resampled = np.array([t.total_seconds() for t in velocities_resampled.index - velocities_df.datetime.min()])
     
@@ -259,9 +261,10 @@ def get_highest_power_circadian_frequency(bee_id, date, velocities=None,
     return dict(max_power=max_power, max_frequency=max_frequency,
                 circadian_power=circadian_power, circadian_frequency=day_frequency)
 
-def collect_circadianess_subsamples_for_bee_date(bee_id, date, verbose=False, n_workers=8, subsample=True, velocity_kws={}, **kwargs):
+def collect_circadianess_subsamples_for_bee_date(bee_id, date, verbose=False, n_workers=8, subsample=True, velocities=None, velocity_kws={}, **kwargs):
     delta = datetime.timedelta(days=1, hours=12)
-    velocities = bb_behavior.db.trajectory.get_bee_velocities(bee_id, date - delta, date + delta, **velocity_kws)
+    if velocities is None:
+        velocities = bb_behavior.db.trajectory.get_bee_velocities(bee_id, date - delta, date + delta, **velocity_kws)
     if velocities is None:
         return []
     starting_date = date - delta
