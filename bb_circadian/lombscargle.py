@@ -16,7 +16,7 @@ import scipy.optimize
 import traceback
 
 
-def get_shuffled_time_series(datetimes, begin_dt, end_dt, values, unshuffled_values=None, n_iter=400, shuffle_interval_hours=1.0):
+def get_shuffled_time_series(datetimes, begin_dt, end_dt, values, unshuffled_values=None, n_iter=400, shuffle_interval_hours=0.5):
     assert shuffle_interval_hours > 0.0
     assert len(values[0]) > 0
     assert datetimes.shape[0] == values[0].shape[0]
@@ -49,16 +49,16 @@ def get_shuffled_time_series(datetimes, begin_dt, end_dt, values, unshuffled_val
         yield itertools.chain(shuffled_values, cut_unshuffled_values)
 
 @numba.njit
-def circadian_sine(x, amplitude, phase, offset):
+def circadian_cosine(x, amplitude, phase, offset):
     frequency = 2.0 * np.pi * 1 / 60 / 60/  24
-    return np.sin(x * frequency + phase) * amplitude + offset
+    return np.cos(x * frequency + phase) * amplitude + offset
 @numba.njit
-def fixed_minimum_circadian_sine(x, amplitude, phase):
+def fixed_minimum_circadian_cosine(x, amplitude, phase):
     frequency = 2.0 * np.pi * 1 / 60 / 60/  24
-    return np.sin(x * frequency + phase) * amplitude + amplitude
+    return np.cos(x * frequency + phase) * amplitude + amplitude
 
-def fit_circadian_sine(X, Y, fix_minimum=False):
-    """Fits a sine wave with a circadian frequency to timestamp-value pairs with the timestamps being in second precision.
+def fit_circadian_cosine(X, Y, fix_minimum=False):
+    """Fits a cosine wave with a circadian frequency to timestamp-value pairs with the timestamps being in second precision.
 
     Arguments:
         X: np.array
@@ -73,15 +73,18 @@ def fit_circadian_sine(X, Y, fix_minimum=False):
     amplitude = 3 * np.std(Y) / (2 ** 0.5)
     phase = 0
     offset = np.mean(Y)
+    bounds = None
     if not fix_minimum:
         initial_parameters = [amplitude, phase, offset]
-        fun = circadian_sine
+        bounds=[(0, 0, -np.inf), (np.inf, np.inf, np.inf)]
+        fun = circadian_cosine
     else:
         initial_parameters = [amplitude + offset / 2.0, phase]
-        fun = fixed_minimum_circadian_sine
-    fit = scipy.optimize.curve_fit(fun, X, Y, p0=initial_parameters, bounds=(0, np.inf))
-    circadian_sine_parameters = fit[0]
-    y_predicted = fun(X, *circadian_sine_parameters)
+        bounds=[(0, -np.inf), (np.inf, np.inf)]
+        fun = fixed_minimum_circadian_cosine
+    fit = scipy.optimize.curve_fit(fun, X, Y, p0=initial_parameters, bounds=bounds)
+    circadian_cosine_parameters = fit[0]
+    y_predicted = fun(X, *circadian_cosine_parameters)
     circadian_sse = np.sum((y_predicted - Y) ** 2.0)
     
     constant_fit, full_data = numpy.polynomial.polynomial.Polynomial.fit(X, Y, deg=0, full=True)
@@ -93,7 +96,7 @@ def fit_circadian_sine(X, Y, fix_minimum=False):
     r_squared_linear = 1.0 - (circadian_sse / linear_sse)
     r_squared = 1.0 - (circadian_sse / constant_sse)
 
-    return dict(parameters=circadian_sine_parameters, jacobian=fit[1],
+    return dict(parameters=circadian_cosine_parameters, jacobian=fit[1],
                 circadian_sse=circadian_sse,
                 angular_frequency=2.0 * np.pi * 1 / 60 / 60/  24,
                 linear_parameters=linear_fit.convert().coef,
@@ -114,7 +117,7 @@ def collect_circadianess_data_for_bee_date(bee_id, date, velocities=None,
     if "offset" in velocities.columns:
         ts = velocities.offset.values
     else:
-        ts = np.array([t.total_seconds() for t in velocities.datetime - velocities.datetime.min()])
+        ts = np.array([t.total_seconds() for t in velocities.datetime - date])
     v = velocities.velocity.values
     assert v.shape[0] == ts.shape[0]
 
@@ -125,8 +128,8 @@ def collect_circadianess_data_for_bee_date(bee_id, date, velocities=None,
     def collect_powers(args):
         shuffled_v, shuffled_ts = args
         try:
-            from bb_circadian.lombscargle import fit_circadian_sine
-            fit = fit_circadian_sine(shuffled_ts, shuffled_v)
+            from bb_circadian.lombscargle import fit_circadian_cosine
+            fit = fit_circadian_cosine(shuffled_ts, shuffled_v)
             return fit["r_squared"]
         except (RuntimeError, TypeError):
             return None
@@ -140,25 +143,29 @@ def collect_circadianess_data_for_bee_date(bee_id, date, velocities=None,
                         values=(v,), unshuffled_values=(ts,),
                         shuffle_interval_hours=shuffle_interval_hours, n_iter=resample_runs))
     resampled_powers = [power for power in resampled_powers if power is not None]
-
-    # Distribution of powers.
-    dist_args = scipy.stats.chi2.fit(resampled_powers, floc=0.0)
-    resampled_distribution = scipy.stats.chi2(*dist_args)
     
     try:
-        bee_date_data = fit_circadian_sine(ts, v)
+        bee_date_data = fit_circadian_cosine(ts, v)
     except (RuntimeError, TypeError):
         return None
+
+    # Distribution of powers.
+    p_value = (100.0 - scipy.stats.percentileofscore(resampled_powers, bee_date_data["r_squared"])) / 100.0
+    dist_args = scipy.stats.chi2.fit(resampled_powers, floc=0.0)
+    resampled_distribution = scipy.stats.chi2(*dist_args)
+
     bee_date_data["bee_id"] = bee_id
     bee_date_data["date"] = date
+    bee_date_data["resampled_powers"] = resampled_powers
     bee_date_data["r_squared_resampled_mean"] = np.mean(resampled_powers)
     bee_date_data["r_squared_resampled_95"] = np.percentile(resampled_powers, 95)
-    bee_date_data["p_value"] = resampled_distribution.sf(bee_date_data["r_squared"])
+    bee_date_data["resampled_p_value"] = p_value
+    bee_date_data["chi2_p_value"] = resampled_distribution.sf(bee_date_data["r_squared"])
     bee_date_data["chi2_fit0"], _, bee_date_data["chi2_scale"] = dist_args
     bee_date_data["goodness_of_fit_D"], bee_date_data["goodness_of_fit"] =  scipy.stats.kstest(resampled_powers, resampled_distribution.cdf)
 
     try:
-        fixed_minimum_fit = fit_circadian_sine(ts, v, fix_minimum=True)
+        fixed_minimum_fit = fit_circadian_cosine(ts, v, fix_minimum=True)
         bee_date_data["fixed_minimum_model"] = fixed_minimum_fit
     except (RuntimeError, TypeError):
         pass
@@ -168,22 +175,32 @@ def collect_circadianess_data_for_bee_date(bee_id, date, velocities=None,
         time_index = pd.DatetimeIndex(velocities.datetime)
         daytime = time_index.indexer_between_time("9:00", "18:00")
         nighttime = time_index.indexer_between_time("21:00", "6:00")
-        bee_date_data["day_mean"] = np.mean(velocities.iloc[daytime].velocity.values)
-        bee_date_data["day_std"] = np.std(velocities.iloc[daytime].velocity.values)
-        bee_date_data["night_mean"] = np.mean(velocities.iloc[nighttime].velocity.values)
-        bee_date_data["night_std"] = np.std(velocities.iloc[nighttime].velocity.values)
+        daytime_velocities = velocities.iloc[daytime].velocity.values
+        nighttime_velocities = velocities.iloc[nighttime].velocity.values
+        bee_date_data["day_mean"] = np.mean(daytime_velocities)
+        bee_date_data["day_std"] = np.std(daytime_velocities)
+        bee_date_data["night_mean"] = np.mean(nighttime_velocities)
+        bee_date_data["night_std"] = np.std(nighttime_velocities)
+
+        U, p = scipy.stats.mannwhitneyu(daytime_velocities[::100], nighttime_velocities[::100], alternative="two-sided")
+        bee_date_data["daynight_two_sided_difference_U"] = U
+        bee_date_data["daynight_two_sided_difference_p"] = p
+        U, p = scipy.stats.mannwhitneyu(daytime_velocities[::100], nighttime_velocities[::100], alternative="greater")
+        bee_date_data["daynight_difference_U"] = U
+        bee_date_data["daynight_difference_p"] = p
     except:
         raise
 
     return bee_date_data
 
-def plot_circadian_fit(velocities_df, circadian_fit_data=None):
+def plot_circadian_fit(velocities_df, circadian_fit_data=None, date=None):
     import seaborn as sns
-    # Convert to timestamps in seconds.
-    ts = np.array([t.total_seconds() for t in velocities_df.datetime - velocities_df.datetime.min()])
     
     if circadian_fit_data is None:
-        circadian_fit_data = fit_circadian_sine(ts, velocities_df.velocity.values)
+        assert date is not None
+        # Convert to timestamps in seconds.
+        ts = np.array([t.total_seconds() for t in velocities_df.datetime - date])
+        circadian_fit_data = fit_circadian_cosine(ts, velocities_df.velocity.values)
     
     velocities_resampled = velocities_df.copy()
     velocities_resampled.set_index("datetime", inplace=True)
@@ -191,7 +208,7 @@ def plot_circadian_fit(velocities_df, circadian_fit_data=None):
     if velocities_resampled.shape[0] > 10000:
         velocities_resampled = velocities_resampled.resample("2min").mean()
     
-    ts_resampled = np.array([t.total_seconds() for t in velocities_resampled.index - velocities_df.datetime.min()])
+    ts_resampled = np.array([t.total_seconds() for t in velocities_resampled.index - circadian_fit_data["date"]])
     
     angular_frequency = circadian_fit_data["angular_frequency"]
     amplitude, phase, offset = circadian_fit_data["parameters"]
@@ -200,11 +217,11 @@ def plot_circadian_fit(velocities_df, circadian_fit_data=None):
 
     base_activity = max(0, offset - amplitude)
     max_activity = offset + amplitude
-    fraction_circadian = max_activity / (base_activity + max_activity)
+    fraction_circadian = 2.0 * ((max_activity / (base_activity + max_activity)) - 0.5)
 
     fig, ax = plt.subplots(figsize=(20, 5))
     
-    y = np.sin(ts_resampled * angular_frequency + phase) * amplitude + offset
+    y = np.cos(ts_resampled * angular_frequency + phase) * amplitude + offset
     y_linear = (ts_resampled * b1) + b0
 
     velocities_resampled["circadian_model"] = y
@@ -216,14 +233,16 @@ def plot_circadian_fit(velocities_df, circadian_fit_data=None):
     velocities_resampled.plot(y="linear_model", ax=ax, color="r", linestyle="--", alpha=1.0)
     velocities_resampled.plot(y="constant_model", ax=ax, color="r", linestyle=":", alpha=1.0)
 
-    fixed_minimum_r_squared = None
-    fixed_amplitude, fixed_phase = None, None
+    fixed_minimum_r_squared = np.nan
+    fixed_amplitude, fixed_phase = np.nan, np.nan
     if "fixed_minimum_model" in circadian_fit_data:
         fixed_minimum_r_squared = circadian_fit_data["fixed_minimum_model"]["r_squared"]
         fixed_amplitude, fixed_phase = circadian_fit_data["fixed_minimum_model"]["parameters"]
-        y = np.sin(ts_resampled * angular_frequency + fixed_phase) * fixed_amplitude + fixed_amplitude
+        y = np.cos(ts_resampled * angular_frequency + fixed_phase) * fixed_amplitude + fixed_amplitude
         velocities_resampled["circadian_model_fixed_min"] = y
         velocities_resampled.plot(y="circadian_model_fixed_min", ax=ax, color="b", linestyle=":", alpha=1.0)
+
+    ax.axvline(velocities_resampled.index[0] + datetime.timedelta(days=1, hours=phase), color="g", linestyle=":")
 
     ax.axhline(base_activity, color="k", linestyle="--")
     ax.axhline(max_activity, color="k", linestyle="--")
@@ -248,7 +267,7 @@ def get_highest_power_circadian_frequency(bee_id, date, velocities=None,
     if "offset" in velocities.columns:
         ts = velocities.offset.values
     else:
-        ts = np.array([t.total_seconds() for t in velocities.datetime - velocities.datetime.min()])
+        ts = np.array([t.total_seconds() for t in velocities.datetime - date])
     ls = astropy.stats.LombScargle(ts, velocities.velocity.values)
     day_frequency = (1 / 60 / 60 / 24)
     min_frequency, max_frequency = day_frequency * 0.8, day_frequency * 1.2
