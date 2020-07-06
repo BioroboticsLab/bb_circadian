@@ -51,11 +51,11 @@ def get_shuffled_time_series(datetimes, begin_dt, end_dt, values, unshuffled_val
 @numba.njit
 def circadian_cosine(x, amplitude, phase, offset):
     frequency = 2.0 * np.pi * 1 / 60 / 60/  24
-    return np.cos(x * frequency + phase) * amplitude + offset
+    return np.cos(x * frequency - phase) * amplitude + offset
 @numba.njit
 def fixed_minimum_circadian_cosine(x, amplitude, phase):
     frequency = 2.0 * np.pi * 1 / 60 / 60/  24
-    return np.cos(x * frequency + phase) * amplitude + amplitude
+    return np.cos(x * frequency - phase) * amplitude + amplitude
 
 def fit_circadian_cosine(X, Y, fix_minimum=False):
     """Fits a cosine wave with a circadian frequency to timestamp-value pairs with the timestamps being in second precision.
@@ -76,7 +76,7 @@ def fit_circadian_cosine(X, Y, fix_minimum=False):
     bounds = None
     if not fix_minimum:
         initial_parameters = [amplitude, phase, offset]
-        bounds=[(0, 0, -np.inf), (np.inf, np.inf, np.inf)]
+        bounds=[(0, -np.inf, 0), (np.inf, np.inf, np.inf)]
         fun = circadian_cosine
     else:
         initial_parameters = [amplitude + offset / 2.0, phase]
@@ -221,7 +221,7 @@ def plot_circadian_fit(velocities_df, circadian_fit_data=None, date=None):
 
     fig, ax = plt.subplots(figsize=(20, 5))
     
-    y = np.cos(ts_resampled * angular_frequency + phase) * amplitude + offset
+    y = np.cos(ts_resampled * angular_frequency - phase) * amplitude + offset
     y_linear = (ts_resampled * b1) + b0
 
     velocities_resampled["circadian_model"] = y
@@ -238,7 +238,7 @@ def plot_circadian_fit(velocities_df, circadian_fit_data=None, date=None):
     if "fixed_minimum_model" in circadian_fit_data:
         fixed_minimum_r_squared = circadian_fit_data["fixed_minimum_model"]["r_squared"]
         fixed_amplitude, fixed_phase = circadian_fit_data["fixed_minimum_model"]["parameters"]
-        y = np.cos(ts_resampled * angular_frequency + fixed_phase) * fixed_amplitude + fixed_amplitude
+        y = np.cos(ts_resampled * angular_frequency - fixed_phase) * fixed_amplitude + fixed_amplitude
         velocities_resampled["circadian_model_fixed_min"] = y
         velocities_resampled.plot(y="circadian_model_fixed_min", ax=ax, color="b", linestyle=":", alpha=1.0)
 
