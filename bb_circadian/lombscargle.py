@@ -286,6 +286,8 @@ def collect_circadianess_subsamples_for_bee_date(bee_id, date, verbose=False, n_
         velocities = bb_behavior.db.trajectory.get_bee_velocities(bee_id, date - delta, date + delta, **velocity_kws)
     if velocities is None:
         return []
+    if velocities.shape[0] == 0:
+        return []
     starting_date = date - delta
     ending_date = date + delta
     total_seconds = (ending_date - starting_date).total_seconds()
