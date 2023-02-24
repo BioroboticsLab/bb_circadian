@@ -23,7 +23,7 @@ setup(
     description='BeesBook circadian behaviour analysis',
     author='David Dormagen',
     author_email='david.dormagen@fu-berlin.de',
-    url='https://github.com/walachey/bb_circadian/',
+    url='https://github.com/BioroboticsLab/bb_circadian/',
     install_requires=reqs,
     dependency_links=dep_links,
     packages=find_packages(),
